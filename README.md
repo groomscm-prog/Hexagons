@@ -1,0 +1,1 @@
+Create hexagonal thinking activities
