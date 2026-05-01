@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hexagonal Thinking - Duo Edition</title>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --duo-blue: #1cb0f6;
+            --duo-blue-dark: #1899d6;
+            --text-main: #4b4b4b;
+            --card-border: #e5e5e5;
+            
+            /* Hexagon Colors (Chunky Palette) */
+            --hex-0: #ddf4ff; --hex-0-border: #bee3f8;
+            --hex-1: #d7ffb8; --hex-1-border: #a5d6a7;
+            --hex-2: #fff4d1; --hex-2-border: #f0d48a;
+            --hex-3: #ffdfef; --hex-3-border: #f0a3ca;
+        }
+
+        body {
+            font-family: "din-round", "Segoe UI", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Toolbar --- */
+        #toolbar {
+            padding: 15px 25px;
+            background: white;
+            border-bottom: 2px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            z-index: 1000;
+        }
+
+        textarea {
+            width: 300px;
+            height: 40px;
+            border: 2px solid var(--card-border);
+            border-radius: 12px;
+            padding: 8px 12px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+        }
+
+        textarea:focus { border-color: var(--duo-blue); }
+
+        /* --- 3D Duo Buttons --- */
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 14px;
+            padding: 10px 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: transform 0.1s;
+            box-shadow: 0 4px 0px #afafaf;
+            background: #e5e5e5;
+            color: #afafaf;
+        }
+
+        button.primary {
+            background: var(--duo-blue);
+            color: white;
+            box-shadow: 0 4px 0px var(--duo-blue-dark);
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0px transparent;
+        }
+
+        .hidden { display: none !important; }
+
+        /* --- Workspace --- */
+        #workspace {
+            flex-grow: 1;
+            position: relative;
+            background-image: radial-gradient(var(--card-border) 1.5px, transparent 1.5px);
+            background-size: 40px 40px;
+            overflow: auto;
+        }
+
+        /* --- Hexagon Styling --- */
+        .hexagon {
+            position: absolute;
+            width: 130px;
+            height: 112px;
+            /* Slightly rounded hexagon clip-path */
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 15px;
+            box-sizing: border-box;
+            cursor: move;
+            user-select: none;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transition: transform 0.1s;
+        }
+
+        /* Applying the unique 4 colors with Duo-style thick borders */
+        .hex-0 { background: var(--hex-0); border: 3px solid var(--hex-0-border); color: #1899d6; box-shadow: 0 5px 0 var(--hex-0-border); }
+        .hex-1 { background: var(--hex-1); border: 3px solid var(--hex-1-border); color: #58a700; box-shadow: 0 5px 0 var(--hex-1-border); }
+        .hex-2 { background: var(--hex-2); border: 3px solid var(--hex-2-border); color: #c67600; box-shadow: 0 5px 0 var(--hex-2-border); }
+        .hex-3 { background: var(--hex-3); border: 3px solid var(--hex-3-border); color: #b92b5d; box-shadow: 0 5px 0 var(--hex-3-border); }
+
+        .hexagon:active {
+            z-index: 1000;
+            transform: scale(1.1);
+        }
+
+        .hex-label { pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div id="toolbar">
+    <div id="teacher-ui">
+        <textarea id="vocabInput" placeholder="Term 1, Term 2, Term 3..."></textarea>
+        <button class="primary" onclick="generateFromInput()">Generate</button>
+        <button onclick="generateShareLink()">Copy Student Link</button>
+    </div>
+    <div id="student-ui" class="hidden">
+        <strong style="color: var(--duo-blue);">Connection Challenge:</strong> 
+        <span style="color: var(--text-main); font-size: 0.9rem;">Move the pieces to connect the ideas!</span>
+    </div>
+    <button id="reset-btn" class="hidden" onclick="location.reload()" style="margin-left: auto;">Reset</button>
+</div>
+
+<div id="workspace"></div>
+
+<script>
+    const workspace = document.getElementById('workspace');
+    const vocabInput = document.getElementById('vocabInput');
+    const teacherUI = document.getElementById('teacher-ui');
+    const studentUI = document.getElementById('student-ui');
+    const resetBtn = document.getElementById('reset-btn');
+
+    window.onload = () => {
+        const params = new URLSearchParams(window.location.search);
+        const encodedTerms = params.get('terms');
+        if (encodedTerms) {
+            teacherUI.classList.add('hidden');
+            studentUI.classList.remove('hidden');
+            resetBtn.classList.remove('hidden');
+            buildHexagons(decodeURIComponent(encodedTerms).split(','));
+        }
+    };
+
+    function generateFromInput() {
+        const terms = vocabInput.value.split(',').map(s => s.trim()).filter(s => s !== "");
+        buildHexagons(terms);
+    }
+
+    function generateShareLink() {
+        const terms = vocabInput.value.split(',').map(s => s.trim()).filter(s => s !== "");
+        if (terms.length === 0) return alert("Enter some words first!");
+        const baseUrl = window.location.href.split('?')[0];
+        const finalUrl = `${baseUrl}?terms=${encodeURIComponent(terms.join(','))}`;
+        navigator.clipboard.writeText(finalUrl);
+        alert("Student link copied! 🦉🎉");
+    }
+
+    function buildHexagons(terms) {
+        workspace.innerHTML = '';
+        terms.forEach((term, i) => {
+            const hex = document.createElement('div');
+            const colorIndex = i % 4;
+            hex.className = `hexagon hex-${colorIndex}`;
+            
+            // Randomly spread them out a bit
+            const col = i % 5;
+            const row = Math.floor(i / 5);
+            hex.style.left = (60 + col * 150) + 'px';
+            hex.style.top = (80 + row * 130) + 'px';
+            
+            hex.innerHTML = `<span class="hex-label">${term}</span>`;
+            hex.onmousedown = startDrag;
+            workspace.appendChild(hex);
+        });
+    }
+
+    // --- Drag & Snap Logic ---
+    let activeElem = null;
+    let offset = { x: 0, y: 0 };
+
+    function startDrag(e) {
+        activeElem = e.target;
+        const rect = activeElem.getBoundingClientRect();
+        offset.x = e.clientX - rect.left;
+        offset.y = e.clientY - rect.top;
+        document.onmousemove = drag;
+        document.onmouseup = stopDrag;
+    }
+
+    function drag(e) {
+        if (!activeElem) return;
+        const parentRect = workspace.getBoundingClientRect();
+        let x = e.clientX - parentRect.left - offset.x;
+        let y = e.clientY - parentRect.top - offset.y;
+        
+        // Soft snapping for easier alignment
+        activeElem.style.left = Math.round(x/8)*8 + 'px';
+        activeElem.style.top = Math.round(y/8)*8 + 'px';
+    }
+
+    function stopDrag() {
+        activeElem = null;
+        document.onmousemove = null;
+        document.onmouseup = null;
+    }
+</script>
+
+</body>
+</html>
