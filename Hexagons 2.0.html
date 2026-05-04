@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hexagonal Thinking - Pro Suite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:wght@700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --duo-blue: #1cb0f6; --duo-blue-dark: #1899d6;
+            --duo-green: #58cc02; --duo-green-dark: #46a302;
+            --duo-orange: #ff9600; --duo-orange-dark: #d97e00;
+            --duo-red: #ff4b4b; --duo-red-dark: #d03131;
+            --duo-gold: #ffc107; --card-border: #e5e5e5;
+            --hex-w: 180px; --hex-h: 156px;
+        }
+
+        body {
+            font-family: "Segoe UI", sans-serif; margin: 0; display: flex;
+            flex-direction: column; height: 100vh; overflow: hidden; touch-action: none;
+            background-color: #f0f2f5;
+        }
+
+        #toolbar {
+            padding: 10px 20px; background: white; border-bottom: 2px solid var(--card-border);
+            display: flex; align-items: center; gap: 12px; z-index: 2000; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .name-input { padding: 8px 12px; border: 2px solid var(--duo-blue); border-radius: 10px; outline: none; font-weight: bold; width: 180px; }
+
+        button {
+            cursor: pointer; border: none; border-radius: 12px; padding: 10px 16px;
+            font-weight: bold; text-transform: uppercase; transition: all 0.1s;
+            box-shadow: 0 4px 0px #afafaf; background: #e5e5e5; color: #777; font-size: 0.75rem;
+        }
+        button.primary { background: var(--duo-blue); color: white; box-shadow: 0 4px 0px var(--duo-blue-dark); }
+        button.success { background: var(--duo-green); color: white; box-shadow: 0 4px 0px var(--duo-green-dark); }
+        button.help { background: #555; color: white; box-shadow: 0 4px 0px #333; border-radius: 50%; width: 35px; height: 35px; padding: 0; }
+        button.active-lock { background: var(--duo-red); color: white; box-shadow: 0 4px 0px var(--duo-red-dark); }
+
+        #workspace {
+            flex-grow: 1; position: relative; background-color: #ffffff;
+            background-image: radial-gradient(#dcdcdc 1px, transparent 1px);
+            background-size: 30px 30px; overflow: auto;
+        }
+
+        .draggable { position: absolute; touch-action: none; display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 10; }
+        .hexagon { width: var(--hex-w); height: var(--hex-h); }
+        .arrow { width: 100px; height: 50px; z-index: 100; }
+        .hex-svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }
+        .content-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+        .hex-label { font-family: 'Lora', serif; font-weight: 700; font-size: 1rem; color: #333; text-align: center; width: 80%; line-height: 1.1; }
+        .arrow-num { position: absolute; left: 35px; color: #7a5e00; font-weight: 900; font-size: 1.4rem; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 5000; }
+        .modal { background: white; padding: 30px; border-radius: 20px; max-width: 600px; max-height: 80vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .modal h2 { color: var(--duo-blue); margin-top: 0; }
+        .modal code { background: #eee; padding: 2px 5px; border-radius: 4px; font-family: monospace; }
+        
+        #justification-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; padding: 15px; background: #e5e5e5; border-top: 2px solid #ccc; }
+        .just-item label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; font-size: 0.85rem; }
+        .just-item textarea { width: 100%; height: 80px; border-radius: 8px; border: 1px solid #ccc; padding: 8px; font-family: inherit; resize: none; box-sizing: border-box; }
+
+        .print-header { display: none; font-size: 1.8rem; font-weight: bold; margin-bottom: 20px; text-align: center; color: #333; }
+        .hidden { display: none !important; }
+
+        @media print {
+            @page { size: portrait; margin: 0.5in; }
+            body { height: auto !important; overflow: visible !important; background: white !important; display: block !important; }
+            #toolbar, .modal-overlay, #undoBtn, .help, #lockHexBtn, #lockArrowBtn { display: none !important; }
+            .print-header { display: block !important; }
+            #workspace { 
+                position: relative !important; height: 7in !important; width: 100% !important; 
+                background: none !important; overflow: visible !important; display: block !important;
+                border-bottom: 2px solid #eee; margin-bottom: 20px; transform: scale(0.85); transform-origin: top left;
+            }
+            .draggable { position: absolute !important; break-inside: avoid; }
+            #justification-panel { display: grid !important; background: white !important; border-top: none !important; gap: 20px !important; padding: 0 !important; }
+            .just-item textarea { border: 1px solid #999 !important; height: 120px !important; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="modal-container" class="modal-overlay">
+    <div class="modal">
+        <h2 id="modal-title">Instructions</h2>
+        <div id="modal-body"></div>
+        <button class="primary" style="margin-top:20px;" onclick="closeModal()">Got it!</button>
+    </div>
+</div>
+
+<div id="toolbar">
+    <div id="teacher-ui">
+        <input type="text" id="vocabInput" placeholder="Enter terms, separated by commas..." style="padding:10px; border-radius:10px; border:1px solid #ccc; width: 280px;">
+        <button class="primary" onclick="initFromTeacher()">Generate</button>
+        <button class="success" onclick="copyLink()">Copy Link</button>
+        <button class="help" onclick="showHelp('teacher')">?</button>
+    </div>
+
+    <div id="student-ui" class="hidden">
+        <input type="text" id="studentName" class="name-input" placeholder="Enter Student Name..." oninput="updatePrintHeader()">
+        <button id="undoBtn" onclick="undo()">Undo</button>
+        <button id="lockHexBtn" onclick="toggleLock('hex')">Lock Hexagons</button>
+        <button id="lockArrowBtn" class="hidden" onclick="toggleLock('arrow')">Lock Arrows</button>
+        <button id="studentPrintBtn" class="primary hidden" onclick="window.print()">Print Product</button>
+        <button class="help" onclick="showHelp('student')">?</button>
+    </div>
+</div>
+
+<div class="print-header" id="printHeader">Hexagonal Thinking Activity</div>
+
+<div id="workspace"></div>
+<div id="justification-panel" class="hidden"></div>
+
+<script>
+    let state = { hexes: [], arrows: [], history: [] };
+    let hexLocked = false, arrowLocked = false;
+    let activeDrag = null;
+
+    const teacherInfo = `
+        <h3>Teacher Setup Guide</h3>
+        <ul>
+            <li><b>Generate:</b> Type words separated by commas to create your hexagons.</li>
+            <li><b>Term Suggestions:</b> For best results, use <b>more than 10 but fewer than 40 terms</b>. Anything over 50 terms tends to clutter the workspace and hinder the critical thinking experience.</li>
+            <li><b>Share:</b> Click "Copy Link" to get a URL that automatically loads your words for students.</li>
+        </ul>
+        <hr>
+        <h3>How to Embed in Canvas</h3>
+        <ol>
+            <li>Generate your word list and click <b>Copy Link</b>.</li>
+            <li>In Canvas, go to your <b>Page/Assignment</b> and click <b>Edit</b>.</li>
+            <li>Switch to the <b>HTML Editor</b> (the <code>&lt;/&gt;</code> icon).</li>
+            <li>Paste the following code (replace the URL with your copied link):</li>
+        </ol>
+        <code style="display:block; padding:10px; background:#f4f4f4; border:1px solid #ccc; margin:10px 0;">
+            &lt;iframe src="PASTE_YOUR_LINK_HERE" width="100%" height="800px" style="border:none;"&gt;&lt;/iframe&gt;
+        </code>`;
+    
+    const studentInfo = `
+        <h3>Student Instructions</h3>
+        <ul>
+            <li><b>Arrange:</b> Drag hexagons to find connections. They will snap together to help you align them.</li>
+            <li><b>Lock Hexagons:</b> Once your web is complete, click "Lock Hexagons" to reveal your 3 numbered arrows.</li>
+            <li><b>Place Arrows:</b> Move arrows 1, 2, and 3 onto your three strongest links.</li>
+            <li><b>Justify:</b> Click "Lock Arrows" to unlock the justification boxes. Explain your choices.</li>
+            <li><b>Submit:</b> Enter your name and click "Print Product" to save as a PDF.</li>
+        </ul>`;
+
+    window.onload = () => {
+        const params = new URLSearchParams(window.location.search);
+        const terms = params.get('terms');
+        if (terms) {
+            document.getElementById('teacher-ui').classList.add('hidden');
+            document.getElementById('student-ui').classList.remove('hidden');
+            const saved = localStorage.getItem('hex_save_' + terms);
+            if (saved) { state = JSON.parse(saved); render(); } 
+            else { initBoard(decodeURIComponent(terms)); }
+            showHelp('student');
+        } else {
+            showHelp('teacher');
+        }
+    };
+
+    function showHelp(role) {
+        document.getElementById('modal-title').innerText = role === 'teacher' ? "Teacher Setup Guide" : "Student Instructions";
+        document.getElementById('modal-body').innerHTML = role === 'teacher' ? teacherInfo : studentInfo;
+        document.getElementById('modal-container').classList.remove('hidden');
+    }
+
+    function closeModal() { document.getElementById('modal-container').classList.add('hidden'); }
+    function updatePrintHeader() {
+        const name = document.getElementById('studentName').value;
+        document.getElementById('printHeader').innerText = name ? `Hexagonal Thinking: ${name}` : "Hexagonal Thinking Activity";
+    }
+
+    function initBoard(termString) {
+        const list = termString.split(',').map(t => t.trim()).filter(t => t !== "");
+        state.hexes = list.map((t, i) => ({
+            id: 'h' + i, text: t, 
+            x: 50 + (i % 5) * 195, y: 50 + Math.floor(i / 5) * 175, 
+            color: ["#ddf4ff", "#d7ffb8", "#fff4d1", "#ffdfef"][i % 4],
+            border: ["#bee3f8", "#a5d6a7", "#f0d48a", "#f0a3ca"][i % 4]
+        }));
+        render();
+    }
+
+    function render() {
+        const ws = document.getElementById('workspace'); ws.innerHTML = '';
+        state.hexes.forEach(h => {
+            const el = document.createElement('div'); el.className = `draggable hexagon ${hexLocked ? 'locked' : ''}`;
+            el.id = h.id; el.style.left = h.x + 'px'; el.style.top = h.y + 'px';
+            el.innerHTML = `<svg class="hex-svg" viewBox="0 0 200 174"><path d="M50 4 L150 4 L196 87 L150 170 L50 170 L4 87 Z" fill="${h.color}" stroke="${h.border}" stroke-width="8" stroke-linejoin="round"/></svg><div class="content-overlay"><span class="hex-label">${h.text}</span></div>`;
+            if (!hexLocked) attachEvents(el, 'hex'); ws.appendChild(el);
+        });
+        state.arrows.forEach((a, idx) => {
+            const el = document.createElement('div'); el.className = `draggable arrow ${arrowLocked ? 'locked' : ''}`;
+            el.id = a.id; el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+            el.innerHTML = `<svg viewBox="0 0 120 60" style="width:100%; height:100%;"><path d="M10 20 H80 V5 L115 30 L80 55 V40 H10 Z" fill="#ffeb3b" stroke="#fbc02d" stroke-width="4" stroke-linejoin="round"/></svg><div class="content-overlay"><span class="arrow-num">${idx + 1}</span></div>`;
+            if (!arrowLocked) attachEvents(el, 'arrow'); ws.appendChild(el);
+        });
+        updateJustification();
+    }
+
+    function attachEvents(el, type) {
+        const start = (e) => {
+            saveHistory(); const t = e.touches ? e.touches[0] : e; const rect = el.getBoundingClientRect();
+            activeDrag = { el, type, offX: t.clientX - rect.left, offY: t.clientY - rect.top };
+        };
+        el.onmousedown = el.ontouchstart = start;
+    }
+
+    window.onmousemove = window.ontouchmove = (e) => {
+        if (!activeDrag) return; const t = e.touches ? e.touches[0] : e; const ws = document.getElementById('workspace');
+        const rect = ws.getBoundingClientRect();
+        let x = t.clientX - rect.left - activeDrag.offX; let y = t.clientY - rect.top - activeDrag.offY;
+        if (activeDrag.type === 'hex') { x = Math.round(x/45)*45; y = Math.round(y/78)*78; }
+        activeDrag.el.style.left = x + 'px'; activeDrag.el.style.top = y + 'px';
+    };
+
+    window.onmouseup = window.ontouchend = () => { if (activeDrag) { syncState(); activeDrag = null; } };
+
+    function syncState() {
+        state.hexes.forEach(h => { const el = document.getElementById(h.id); h.x = parseInt(el.style.left); h.y = parseInt(el.style.top); });
+        state.arrows.forEach(a => { const el = document.getElementById(a.id); a.x = parseInt(el.style.left); a.y = parseInt(el.style.top); });
+        const key = new URLSearchParams(window.location.search).get('terms');
+        if (key) localStorage.setItem('hex_save_' + key, JSON.stringify(state));
+    }
+
+    function toggleLock(type) {
+        if (type === 'hex') {
+            hexLocked = !hexLocked; document.getElementById('lockHexBtn').innerText = hexLocked ? "Unlock Hexagons" : "Lock Hexagons";
+            document.getElementById('lockHexBtn').classList.toggle('active-lock');
+            if (hexLocked && state.arrows.length === 0) {
+                state.arrows = [{id:'a1'},{id:'a2'},{id:'a3'}]; state.arrows.forEach((a, i) => { a.x = 50 + (i*120); a.y = 550; });
+                document.getElementById('lockArrowBtn').classList.remove('hidden');
+            }
+        } else {
+            arrowLocked = !arrowLocked; document.getElementById('lockArrowBtn').classList.toggle('active-lock');
+            document.getElementById('studentPrintBtn').classList.toggle('hidden'); document.getElementById('justification-panel').classList.toggle('hidden');
+        }
+        render();
+    }
+
+    function updateJustification() {
+        const p = document.getElementById('justification-panel');
+        p.innerHTML = [1,2,3].map(n => `<div class="just-item"><label>Connection ${n}</label><textarea placeholder="Justify your selection..."></textarea></div>`).join('');
+    }
+
+    function saveHistory() { state.history.push(JSON.stringify({hexes: state.hexes, arrows: state.arrows})); if (state.history.length > 20) state.history.shift(); }
+    function undo() { if (state.history.length > 0) { const last = JSON.parse(state.history.pop()); state.hexes = last.hexes; state.arrows = last.arrows; render(); syncState(); } }
+    function copyLink() {
+        const t = document.getElementById('vocabInput').value; if (!t) return alert("Enter terms!");
+        const url = window.location.href.split('?')[0] + '?terms=' + encodeURIComponent(t);
+        navigator.clipboard.writeText(url); alert("Link Copied!");
+    }
+    function initFromTeacher() { initBoard(document.getElementById('vocabInput').value); }
+</script>
+</body>
+</html>
